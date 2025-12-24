@@ -102,26 +102,38 @@ app.MapPost("/minimal/users", async (UserCreate dto, IUserService service) =>
         });
     }
 
-    var created = await service.CreateUserAsync(new User
+    try
     {
-        Username = dto.Username,
-        Email = dto.Email,
-        PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password)
-    });
-
-    return Results.Created($"/minimal/users/{created.Id}", new ApiResponse<UserResponse>
-    {
-        Success = true,
-        Message = "User created",
-        Data = new UserResponse
+        var created = await service.CreateUserAsync(new User
         {
-            Id = created.Id,
-            Username = created.Username,
-            Email = created.Email,
-            CreatedAt = created.CreatedAt,
-            UpdatedAt = created.UpdatedAt
-        }
-    });
+            Username = dto.Username,
+            Email = dto.Email,
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password)
+        });
+
+        return Results.Created($"/minimal/users/{created.Id}", new ApiResponse<UserResponse>
+        {
+            Success = true,
+            Message = "User created",
+            Data = new UserResponse
+            {
+                Id = created.Id,
+                Username = created.Username,
+                Email = created.Email,
+                CreatedAt = created.CreatedAt,
+                UpdatedAt = created.UpdatedAt
+            }
+        });
+    }
+    catch (InvalidOperationException ex)
+    {
+        return Results.Conflict(new ApiResponse<object>
+        {
+            Success = false,
+            Message = ex.Message,
+            Data = null
+        });
+    }
 });
 
 app.MapPut("/minimal/users/{id:int}", async (int id, UserUpdate dto, IUserService service) =>

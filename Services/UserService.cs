@@ -31,6 +31,12 @@ public class UserService : IUserService
 
     public async Task<User> CreateUserAsync(User user)
     {
+        var exists = await _db.Users.AnyAsync(u =>
+            u.Username == user.Username || u.Email == user.Email);
+
+        if (exists)
+            throw new InvalidOperationException("Username or email already exists");
+            
         user.CreatedAt = DateTime.UtcNow;
         user.UpdatedAt = DateTime.UtcNow;
 
