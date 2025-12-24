@@ -24,6 +24,11 @@ public class UserService : IUserService
         return await _db.Users.FirstOrDefaultAsync(x => x.Id == id);
     }
 
+     public async Task<User?> GetByUsernameAsync(string username)
+    {
+        return await _db.Users.FirstOrDefaultAsync(u => u.Username == username);
+    }
+
     public async Task<User> CreateUserAsync(User user)
     {
         user.CreatedAt = DateTime.UtcNow;
@@ -40,6 +45,7 @@ public class UserService : IUserService
         if (existing == null) return null;
 
         existing.Username = user.Username;
+        existing.Email = user.Email;
         existing.UpdatedAt = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();

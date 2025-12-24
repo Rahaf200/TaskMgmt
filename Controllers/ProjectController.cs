@@ -1,11 +1,12 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using TaskMgmt.Interfaces;
 using TaskMgmt.DTOs;
 using TaskMgmt.Models;
 using TaskMgmt.Common;
 
 namespace TaskMgmt.Controllers;
-
+[Authorize]
 [ApiController]
 [Route("api/[controller]")]
 public class ProjectController : ControllerBase

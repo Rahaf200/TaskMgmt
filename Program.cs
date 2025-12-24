@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
 using TaskMgmt.Context;
 using TaskMgmt.Interfaces;
@@ -7,6 +8,9 @@ using TaskMgmt.Middlewares;
 using TaskMgmt.Common;
 using TaskMgmt.Models;
 using TaskMgmt.DTOs;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -31,7 +35,44 @@ builder.Services.AddControllers()
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(options =>
+{
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuer = true,
+        ValidateAudience = true,
+        ValidateLifetime = true,
+        ValidateIssuerSigningKey = true,
+
+        ValidIssuer = "TaskMgmtAPI",
+        ValidAudience = "TaskMgmtClient",
+
+        IssuerSigningKey = new SymmetricSecurityKey(
+            Encoding.UTF8.GetBytes("TASKMGMT_SUPER_SECRET_KEY_123")
+        )
+    };
+});
+
+builder.Services.AddAuthorization();
+
 var app = builder.Build();
+
+// ===================== VALIDATION HELPER =====================
+//400 Bad request 
+static bool TryValidate<T>(T model, out List<string> errors)
+{
+    var context = new ValidationContext(model!);
+    var results = new List<ValidationResult>();
+    var isValid = Validator.TryValidateObject(model!, context, results, true);
+
+    errors = results.Select(r => r.ErrorMessage!).ToList();
+    return isValid;
+}
 
 // ===================== MIDDLEWARE =====================
 app.UseMiddleware<GlobalExceptionMiddleware>();
@@ -43,59 +84,29 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+app.UseAuthentication();
+app.UseAuthorization();
 app.MapControllers();
 
-
-// ====================================================
 // ===================== USERS =========================
-// ====================================================
-
-app.MapGet("/minimal/users", async (IUserService service) =>
-{
-    var users = await service.GetAllUsersAsync();
-
-    return Results.Ok(new ApiResponse<List<UserResponse>>
-    {
-        Success = true,
-        Message = "Users fetched",
-        Data = users.Select(u => new UserResponse
-        {
-            Id = u.Id,
-            Username = u.Username,
-            Email = u.Email,
-            CreatedAt = u.CreatedAt,
-            UpdatedAt = u.UpdatedAt
-        }).ToList()
-    });
-});
-
-app.MapGet("/minimal/users/{id:int}", async (int id, IUserService service) =>
-{
-    var user = await service.GetUserByIdAsync(id);
-    if (user == null)
-        return Results.NotFound(new ApiResponse<object> { Success = false, Message = "User not found" });
-
-    return Results.Ok(new ApiResponse<UserResponse>
-    {
-        Success = true,
-        Message = "User fetched",
-        Data = new UserResponse
-        {
-            Id = user.Id,
-            Username = user.Username,
-            Email = user.Email,
-            CreatedAt = user.CreatedAt,
-            UpdatedAt = user.UpdatedAt
-        }
-    });
-});
 
 app.MapPost("/minimal/users", async (UserCreate dto, IUserService service) =>
 {
+    if (!TryValidate(dto, out var errors))
+    {
+        return Results.BadRequest(new ApiResponse<object>
+        {
+            Success = false,
+            Message = "Validation failed",
+            Data = errors
+        });
+    }
+
     var created = await service.CreateUserAsync(new User
     {
         Username = dto.Username,
-        Email = dto.Email
+        Email = dto.Email,
+        PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password)
     });
 
     return Results.Created($"/minimal/users/{created.Id}", new ApiResponse<UserResponse>
@@ -115,6 +126,16 @@ app.MapPost("/minimal/users", async (UserCreate dto, IUserService service) =>
 
 app.MapPut("/minimal/users/{id:int}", async (int id, UserUpdate dto, IUserService service) =>
 {
+    if (!TryValidate(dto, out var errors))
+    {
+        return Results.BadRequest(new ApiResponse<object>
+        {
+            Success = false,
+            Message = "Validation failed",
+            Data = errors
+        });
+    }
+
     var user = await service.GetUserByIdAsync(id);
     if (user == null)
         return Results.NotFound(new ApiResponse<object> { Success = false, Message = "User not found" });
@@ -139,41 +160,20 @@ app.MapPut("/minimal/users/{id:int}", async (int id, UserUpdate dto, IUserServic
     });
 });
 
-app.MapDelete("/minimal/users/{id:int}", async (int id, IUserService service) =>
-{
-    if (!await service.DeleteUserAsync(id))
-        return Results.NotFound(new ApiResponse<object> { Success = false, Message = "User not found" });
-
-    return Results.NoContent();
-});
-
-
-// ====================================================
 // ==================== PROJECTS =======================
-// ====================================================
-
-app.MapGet("/minimal/projects", async (IProjectService service) =>
-{
-    var projects = await service.GetAllProjectsAsync();
-
-    return Results.Ok(new ApiResponse<List<ProjectResponse>>
-    {
-        Success = true,
-        Message = "Projects fetched",
-        Data = projects.Select(p => new ProjectResponse
-        {
-            Id = p.Id,
-            Name = p.Name,
-            Description = p.Description,
-            UserId = p.UserId,
-            CreatedAt = p.CreatedAt,
-            UpdatedAt = p.UpdatedAt
-        }).ToList()
-    });
-});
 
 app.MapPost("/minimal/projects", async (ProjectCreate dto, IProjectService service) =>
 {
+    if (!TryValidate(dto, out var errors))
+    {
+        return Results.BadRequest(new ApiResponse<object>
+        {
+            Success = false,
+            Message = "Validation failed",
+            Data = errors
+        });
+    }
+
     var created = await service.CreateProjectAsync(new Project
     {
         Name = dto.Name,
@@ -195,10 +195,21 @@ app.MapPost("/minimal/projects", async (ProjectCreate dto, IProjectService servi
             UpdatedAt = created.UpdatedAt
         }
     });
-});
+})
+.RequireAuthorization();
 
 app.MapPut("/minimal/projects/{id:int}", async (int id, ProjectUpdate dto, IProjectService service) =>
 {
+    if (!TryValidate(dto, out var errors))
+    {
+        return Results.BadRequest(new ApiResponse<object>
+        {
+            Success = false,
+            Message = "Validation failed",
+            Data = errors
+        });
+    }
+
     var project = await service.GetProjectByIdAsync(id);
     if (project == null)
         return Results.NotFound(new ApiResponse<object> { Success = false, Message = "Project not found" });
@@ -222,45 +233,23 @@ app.MapPut("/minimal/projects/{id:int}", async (int id, ProjectUpdate dto, IProj
             UpdatedAt = updated.UpdatedAt
         }
     });
-});
+})
+.RequireAuthorization();
 
-app.MapDelete("/minimal/projects/{id:int}", async (int id, IProjectService service) =>
-{
-    if (!await service.DeleteProjectAsync(id))
-        return Results.NotFound(new ApiResponse<object> { Success = false, Message = "Project not found" });
-
-    return Results.NoContent();
-});
-
-
-// ====================================================
 // ====================== TASKS ========================
-// ====================================================
-
-app.MapGet("/minimal/tasks", async (ITaskItemService service) =>
-{
-    var tasks = await service.GetAllTasksAsync();
-
-    return Results.Ok(new ApiResponse<List<TaskResponse>>
-    {
-        Success = true,
-        Message = "Tasks fetched",
-        Data = tasks.Select(t => new TaskResponse
-        {
-            Id = t.Id,
-            Title = t.Title,
-            Description = t.Description,
-            Status = t.Status,
-            UserId = t.UserId,
-            ProjectId = t.ProjectId,
-            CreatedAt = t.CreatedAt,
-            UpdatedAt = t.UpdatedAt
-        }).ToList()
-    });
-});
 
 app.MapPost("/minimal/tasks", async (TaskCreate dto, ITaskItemService service) =>
 {
+    if (!TryValidate(dto, out var errors))
+    {
+        return Results.BadRequest(new ApiResponse<object>
+        {
+            Success = false,
+            Message = "Validation failed",
+            Data = errors
+        });
+    }
+
     var created = await service.CreateTaskAsync(new TaskItem
     {
         Title = dto.Title,
@@ -286,10 +275,21 @@ app.MapPost("/minimal/tasks", async (TaskCreate dto, ITaskItemService service) =
             UpdatedAt = created.UpdatedAt
         }
     });
-});
+})
+.RequireAuthorization();
 
 app.MapPut("/minimal/tasks/{id:int}", async (int id, TaskUpdate dto, ITaskItemService service) =>
 {
+    if (!TryValidate(dto, out var errors))
+    {
+        return Results.BadRequest(new ApiResponse<object>
+        {
+            Success = false,
+            Message = "Validation failed",
+            Data = errors
+        });
+    }
+
     var task = await service.GetTaskByIdAsync(id);
     if (task == null)
         return Results.NotFound(new ApiResponse<object> { Success = false, Message = "Task not found" });
@@ -316,43 +316,23 @@ app.MapPut("/minimal/tasks/{id:int}", async (int id, TaskUpdate dto, ITaskItemSe
             UpdatedAt = updated.UpdatedAt
         }
     });
-});
+})
+.RequireAuthorization();
 
-app.MapDelete("/minimal/tasks/{id:int}", async (int id, ITaskItemService service) =>
-{
-    if (!await service.DeleteTaskAsync(id))
-        return Results.NotFound(new ApiResponse<object> { Success = false, Message = "Task not found" });
-
-    return Results.NoContent();
-});
-
-
-// ====================================================
 // ===================== COMMENTS ======================
-// ====================================================
-
-app.MapGet("/minimal/tasks/{taskId:int}/comments", async (int taskId, ICommentService service) =>
-{
-    var comments = await service.GetCommentsByTaskIdAsync(taskId);
-
-    return Results.Ok(new ApiResponse<List<CommentResponse>>
-    {
-        Success = true,
-        Message = "Comments fetched",
-        Data = comments.Select(c => new CommentResponse
-        {
-            Id = c.Id,
-            Content = c.Content,
-            TaskItemId = c.TaskItemId,
-            UserId = c.CreatedByUserId,
-            CreatedAt = c.CreatedAt,
-            UpdatedAt = c.UpdatedAt
-        }).ToList()
-    });
-});
 
 app.MapPost("/minimal/comments", async (CommentCreate dto, ICommentService service) =>
 {
+    if (!TryValidate(dto, out var errors))
+    {
+        return Results.BadRequest(new ApiResponse<object>
+        {
+            Success = false,
+            Message = "Validation failed",
+            Data = errors
+        });
+    }
+
     var created = await service.CreateCommentAsync(new Comment
     {
         Content = dto.Content,
@@ -374,10 +354,21 @@ app.MapPost("/minimal/comments", async (CommentCreate dto, ICommentService servi
             UpdatedAt = created.UpdatedAt
         }
     });
-});
+})
+.RequireAuthorization();
 
 app.MapPut("/minimal/comments/{id:int}", async (int id, CommentUpdate dto, ICommentService service) =>
 {
+    if (!TryValidate(dto, out var errors))
+    {
+        return Results.BadRequest(new ApiResponse<object>
+        {
+            Success = false,
+            Message = "Validation failed",
+            Data = errors
+        });
+    }
+
     var comment = await service.GetCommentByIdAsync(id);
     if (comment == null)
         return Results.NotFound(new ApiResponse<object> { Success = false, Message = "Comment not found" });
@@ -400,14 +391,7 @@ app.MapPut("/minimal/comments/{id:int}", async (int id, CommentUpdate dto, IComm
             UpdatedAt = updated.UpdatedAt
         }
     });
-});
-
-app.MapDelete("/minimal/comments/{id:int}", async (int id, ICommentService service) =>
-{
-    if (!await service.DeleteCommentAsync(id))
-        return Results.NotFound(new ApiResponse<object> { Success = false, Message = "Comment not found" });
-
-    return Results.NoContent();
-});
+})
+.RequireAuthorization();
 
 app.Run();
