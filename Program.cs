@@ -102,26 +102,38 @@ app.MapPost("/minimal/users", async (UserCreate dto, IUserService service) =>
         });
     }
 
-    var created = await service.CreateUserAsync(new User
+    try
     {
-        Username = dto.Username,
-        Email = dto.Email,
-        PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password)
-    });
-
-    return Results.Created($"/minimal/users/{created.Id}", new ApiResponse<UserResponse>
-    {
-        Success = true,
-        Message = "User created",
-        Data = new UserResponse
+        var created = await service.CreateUserAsync(new User
         {
-            Id = created.Id,
-            Username = created.Username,
-            Email = created.Email,
-            CreatedAt = created.CreatedAt,
-            UpdatedAt = created.UpdatedAt
-        }
-    });
+            Username = dto.Username,
+            Email = dto.Email,
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password)
+        });
+
+        return Results.Created($"/minimal/users/{created.Id}", new ApiResponse<UserResponse>
+        {
+            Success = true,
+            Message = "User created",
+            Data = new UserResponse
+            {
+                Id = created.Id,
+                Username = created.Username,
+                Email = created.Email,
+                CreatedAt = created.CreatedAt,
+                UpdatedAt = created.UpdatedAt
+            }
+        });
+    }
+    catch (InvalidOperationException ex)
+    {
+        return Results.Conflict(new ApiResponse<object>
+        {
+            Success = false,
+            Message = ex.Message,
+            Data = null
+        });
+    }
 });
 
 app.MapPut("/minimal/users/{id:int}", async (int id, UserUpdate dto, IUserService service) =>
@@ -238,7 +250,7 @@ app.MapPut("/minimal/projects/{id:int}", async (int id, ProjectUpdate dto, IProj
 
 // ====================== TASKS ========================
 
-app.MapPost("/minimal/tasks", async (TaskCreate dto, ITaskItemService service) =>
+app.MapPost("/minimal/projects/{projectId:int}/tasks", async (int projectId, TaskCreate dto, ITaskItemService service) =>
 {
     if (!TryValidate(dto, out var errors))
     {
@@ -256,7 +268,7 @@ app.MapPost("/minimal/tasks", async (TaskCreate dto, ITaskItemService service) =
         Description = dto.Description,
         Status = dto.Status,
         UserId = dto.UserId,
-        ProjectId = dto.ProjectId
+        ProjectId = projectId
     });
 
     return Results.Ok(new ApiResponse<TaskResponse>
@@ -278,7 +290,8 @@ app.MapPost("/minimal/tasks", async (TaskCreate dto, ITaskItemService service) =
 })
 .RequireAuthorization();
 
-app.MapPut("/minimal/tasks/{id:int}", async (int id, TaskUpdate dto, ITaskItemService service) =>
+app.MapPut("/minimal/projects/{projectId:int}/tasks/{id:int}",
+async (int projectId, int id, TaskUpdate dto, ITaskItemService service) =>
 {
     if (!TryValidate(dto, out var errors))
     {
@@ -292,7 +305,17 @@ app.MapPut("/minimal/tasks/{id:int}", async (int id, TaskUpdate dto, ITaskItemSe
 
     var task = await service.GetTaskByIdAsync(id);
     if (task == null)
-        return Results.NotFound(new ApiResponse<object> { Success = false, Message = "Task not found" });
+        return Results.NotFound(new ApiResponse<object>
+        {
+            Success = false,
+            Message = "Task not found"
+        });
+    if (task.ProjectId != projectId)
+        return Results.NotFound(new ApiResponse<object>
+        {
+            Success = false,
+            Message = "Task does not belong to this project"
+        });
 
     task.Title = dto.Title;
     task.Description = dto.Description;
@@ -319,9 +342,10 @@ app.MapPut("/minimal/tasks/{id:int}", async (int id, TaskUpdate dto, ITaskItemSe
 })
 .RequireAuthorization();
 
+
 // ===================== COMMENTS ======================
 
-app.MapPost("/minimal/comments", async (CommentCreate dto, ICommentService service) =>
+app.MapPost("/minimal/tasks/{taskId:int}/comments", async (int taskId, CommentCreate dto, ICommentService service) =>
 {
     if (!TryValidate(dto, out var errors))
     {
@@ -336,7 +360,7 @@ app.MapPost("/minimal/comments", async (CommentCreate dto, ICommentService servi
     var created = await service.CreateCommentAsync(new Comment
     {
         Content = dto.Content,
-        TaskItemId = dto.TaskItemId,
+        TaskItemId = taskId,
         CreatedByUserId = dto.UserId
     });
 
@@ -357,7 +381,7 @@ app.MapPost("/minimal/comments", async (CommentCreate dto, ICommentService servi
 })
 .RequireAuthorization();
 
-app.MapPut("/minimal/comments/{id:int}", async (int id, CommentUpdate dto, ICommentService service) =>
+app.MapPut("/minimal/tasks/{taskId:int}/comments/{id:int}", async (int taskId, int id, CommentUpdate dto, ICommentService service) =>
 {
     if (!TryValidate(dto, out var errors))
     {
@@ -372,6 +396,13 @@ app.MapPut("/minimal/comments/{id:int}", async (int id, CommentUpdate dto, IComm
     var comment = await service.GetCommentByIdAsync(id);
     if (comment == null)
         return Results.NotFound(new ApiResponse<object> { Success = false, Message = "Comment not found" });
+
+    if (comment.TaskItemId != taskId)
+        return Results.NotFound(new ApiResponse<object>
+        {
+            Success = false,
+            Message = "Comment does not belong to this task"
+        });
 
     comment.Content = dto.Content;
 

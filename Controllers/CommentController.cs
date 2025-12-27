@@ -7,7 +7,7 @@ using TaskMgmt.Common;
 namespace TaskMgmt.Controllers;
 
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/tasks/{taskId}/comments")]
 public class CommentController : ControllerBase
 {
     private readonly ICommentService _service;
@@ -17,8 +17,8 @@ public class CommentController : ControllerBase
         _service = service;
     }
 
-    [HttpGet("task/{taskId}")]
-    public async Task<IActionResult> GetByTask(int taskId)
+    [HttpGet]
+    public async Task<IActionResult> GetByTask(int taskId)   
     {
         var comments = await _service.GetCommentsByTaskIdAsync(taskId);
 
@@ -41,12 +41,12 @@ public class CommentController : ControllerBase
     }
 
     [HttpPost]
-    public async Task<IActionResult> Create(CommentCreate dto)
+    public async Task<IActionResult> Create(int taskId, CommentCreate dto) 
     {
         var comment = new Comment
         {
             Content = dto.Content,
-            TaskItemId = dto.TaskItemId,
+            TaskItemId = taskId,
             CreatedByUserId = dto.UserId
         };
 
@@ -67,14 +67,14 @@ public class CommentController : ControllerBase
             }
         });
     }
-
     [HttpDelete("{id}")]
-    public async Task<IActionResult> Delete(int id)
+    public async Task<IActionResult> Delete(int taskId,  int id) 
     {
-        var success = await _service.DeleteCommentAsync(id);
-        if (!success)
+        var comment = await _service.GetCommentByIdAsync(id);
+        if (comment == null || comment.TaskItemId != taskId)
             return NotFound();
 
+        await _service.DeleteCommentAsync(id);
         return NoContent();
     }
 }
