@@ -27,7 +27,13 @@ public class TaskItemService : ITaskItemService
             .Include(t => t.Comments)
             .FirstOrDefaultAsync(x => x.Id == id);
     }
-
+    public async Task<IEnumerable<TaskItem>> GetTasksByProjectIdAsync(int projectId)
+    {
+        return await _db.TaskItems
+            .Where(t => t.ProjectId == projectId)
+            .Include(t => t.Comments)
+            .ToListAsync();
+    }
     public async Task<TaskItem> CreateTaskAsync(TaskItem task)
     {
         task.CreatedAt = DateTime.UtcNow;
