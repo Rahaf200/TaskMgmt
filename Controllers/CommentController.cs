@@ -72,9 +72,19 @@ public class CommentController : ControllerBase
     {
         var comment = await _service.GetCommentByIdAsync(id);
         if (comment == null || comment.TaskItemId != taskId)
-            return NotFound();
+           return NotFound(new ApiResponse<object>
+          {
+            Success = false,
+            Message = "Comment not found",
+            Data = null
+          });
 
         await _service.DeleteCommentAsync(id);
-        return NoContent();
+         return Ok(new ApiResponse<object>
+        {
+        Success = true,
+        Message = "Comment deleted successfully",
+        Data = null
+        });
     }
 }

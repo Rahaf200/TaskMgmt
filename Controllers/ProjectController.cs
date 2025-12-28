@@ -103,7 +103,13 @@ public class ProjectController : ControllerBase
     {
         var existing = await _service.GetProjectByIdAsync(id);
         if (existing == null)
-            return NotFound();
+
+            return NotFound(new ApiResponse<object>
+           {
+            Success = false,
+            Message = "Project not found",
+            Data = null
+           });
 
         existing.Name = dto.Name;
         existing.Description = dto.Description;
@@ -131,8 +137,18 @@ public class ProjectController : ControllerBase
     {
         var success = await _service.DeleteProjectAsync(id);
         if (!success)
-            return NotFound();
+            return NotFound(new ApiResponse<object>
+           {
+            Success = false,
+            Message = "Project not found",
+            Data = null
+           });
 
-        return NoContent();
+        return Ok(new ApiResponse<object>
+       {
+        Success = true,
+        Message = "Project deleted successfully",
+        Data = null
+       });
     }
 }

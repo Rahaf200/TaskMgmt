@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using TaskMgmt.Common;
 
 namespace TaskMgmt.Middlewares;
 
@@ -23,10 +24,11 @@ public class GlobalExceptionMiddleware
             context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
             context.Response.ContentType = "application/json";
 
-            var response = new
+            var response = new ApiResponse<object>
             {
-                status = 500,
-                message = "An unexpected error occurred"
+                Success = false,
+                Message = "An unexpected error occurred",
+                Data = null
             };
 
             await context.Response.WriteAsync(JsonSerializer.Serialize(response));

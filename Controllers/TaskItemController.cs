@@ -75,14 +75,18 @@ public class TaskItemController : ControllerBase
     }
 
     [HttpPut("{id}")]
-    public async Task<IActionResult> Update(int projectId,int id,TaskUpdate dto)
+    public async Task<IActionResult> Update(int projectId, int id, TaskUpdate dto)
     {
         var existing = await _service.GetTaskByIdAsync(id);
-        if (existing == null)
-            return NotFound();
 
-        if (existing.ProjectId != projectId)
-            return NotFound();
+        if (existing == null || existing.ProjectId != projectId)
+
+        return NotFound(new ApiResponse<object>
+        {
+            Success = false,
+            Message = "Task not found",
+            Data = null
+        });
 
         existing.Title = dto.Title;
         existing.Description = dto.Description;
@@ -109,13 +113,23 @@ public class TaskItemController : ControllerBase
     }
 
     [HttpDelete("{id}")]
-    public async Task<IActionResult> Delete(int projectId,int id)
+    public async Task<IActionResult> Delete(int projectId, int id)
     {
         var existing = await _service.GetTaskByIdAsync(id);
         if (existing == null || existing.ProjectId != projectId)
-            return NotFound();
+            return NotFound(new ApiResponse<object>
+           {
+            Success = false,
+            Message = "Task not found",
+            Data = null
+           });
 
         await _service.DeleteTaskAsync(id);
-        return NoContent();
+        return Ok(new ApiResponse<object>
+       {
+        Success = true,
+        Message = "Task deleted successfully",
+        Data = null
+       });
     }
 }

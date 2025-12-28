@@ -172,6 +172,72 @@ app.MapPut("/minimal/users/{id:int}", async (int id, UserUpdate dto, IUserServic
     });
 });
 
+app.MapGet("/minimal/users", async (IUserService service) =>
+{
+    var users = await service.GetAllUsersAsync();
+
+    var response = users.Select(u => new UserResponse
+    {
+        Id = u.Id,
+        Username = u.Username,
+        Email = u.Email,
+        CreatedAt = u.CreatedAt,
+        UpdatedAt = u.UpdatedAt
+    }).ToList();
+
+    return Results.Ok(new ApiResponse<List<UserResponse>>
+    {
+        Success = true,
+        Message = "Users fetched",
+        Data = response
+    });
+});
+
+app.MapGet("/minimal/users/{id:int}", async (int id, IUserService service) =>
+{
+    var user = await service.GetUserByIdAsync(id);
+    if (user == null)
+        return Results.NotFound(new ApiResponse<object>
+        {
+            Success = false,
+            Message = "User not found",
+            Data = null
+        });
+
+    return Results.Ok(new ApiResponse<UserResponse>
+    {
+        Success = true,
+        Message = "User fetched",
+        Data = new UserResponse
+        {
+            Id = user.Id,
+            Username = user.Username,
+            Email = user.Email,
+            CreatedAt = user.CreatedAt,
+            UpdatedAt = user.UpdatedAt
+        }
+    });
+});
+
+app.MapDelete("/minimal/users/{id:int}", async (int id, IUserService service) =>
+{
+    var success = await service.DeleteUserAsync(id);
+    if (!success)
+        return Results.NotFound(new ApiResponse<object>
+        {
+            Success = false,
+            Message = "User not found",
+            Data = null
+        });
+
+    return Results.Ok(new ApiResponse<object>
+    {
+        Success = true,
+        Message = "User deleted successfully",
+        Data = null
+    });
+});
+
 // ==================== PROJECTS =======================
 
 app.MapPost("/minimal/projects", async (ProjectCreate dto, IProjectService service) =>
@@ -247,6 +313,78 @@ app.MapPut("/minimal/projects/{id:int}", async (int id, ProjectUpdate dto, IProj
     });
 })
 .RequireAuthorization();
+
+app.MapGet("/minimal/projects", async (IProjectService service) =>
+{
+    var projects = await service.GetAllProjectsAsync();
+
+    var response = projects.Select(p => new ProjectResponse
+    {
+        Id = p.Id,
+        Name = p.Name,
+        Description = p.Description,
+        UserId = p.UserId,
+        CreatedAt = p.CreatedAt,
+        UpdatedAt = p.UpdatedAt
+    }).ToList();
+
+    return Results.Ok(new ApiResponse<List<ProjectResponse>>
+    {
+        Success = true,
+        Message = "Projects fetched",
+        Data = response
+    });
+})
+.RequireAuthorization();
+
+app.MapGet("/minimal/projects/{id:int}", async (int id, IProjectService service) =>
+{
+    var project = await service.GetProjectByIdAsync(id);
+    if (project == null)
+        return Results.NotFound(new ApiResponse<object>
+        {
+            Success = false,
+            Message = "Project not found",
+            Data = null
+        });
+
+    return Results.Ok(new ApiResponse<ProjectResponse>
+    {
+        Success = true,
+        Message = "Project fetched",
+        Data = new ProjectResponse
+        {
+            Id = project.Id,
+            Name = project.Name,
+            Description = project.Description,
+            UserId = project.UserId,
+            CreatedAt = project.CreatedAt,
+            UpdatedAt = project.UpdatedAt
+        }
+    });
+})
+.RequireAuthorization();
+
+app.MapDelete("/minimal/projects/{id:int}", async (int id, IProjectService service) =>
+{
+    var success = await service.DeleteProjectAsync(id);
+    if (!success)
+        return Results.NotFound(new ApiResponse<object>
+        {
+            Success = false,
+            Message = "Project not found",
+            Data = null
+        });
+
+     return Results.Ok(new ApiResponse<object>
+    {
+        Success = true,
+        Message = "Project deleted successfully",
+        Data = null
+    });
+})
+.RequireAuthorization();
+
 
 // ====================== TASKS ========================
 
@@ -342,6 +480,86 @@ async (int projectId, int id, TaskUpdate dto, ITaskItemService service) =>
 })
 .RequireAuthorization();
 
+app.MapGet("/minimal/projects/{projectId:int}/tasks",
+async (int projectId, ITaskItemService service) =>
+{
+    var tasks = await service.GetTasksByProjectIdAsync(projectId);
+
+    var response = tasks.Select(t => new TaskResponse
+    {
+        Id = t.Id,
+        Title = t.Title,
+        Description = t.Description,
+        Status = t.Status,
+        UserId = t.UserId,
+        ProjectId = t.ProjectId,
+        CreatedAt = t.CreatedAt,
+        UpdatedAt = t.UpdatedAt
+    }).ToList();
+
+    return Results.Ok(new ApiResponse<List<TaskResponse>>
+    {
+        Success = true,
+        Message = "Tasks fetched",
+        Data = response
+    });
+})
+.RequireAuthorization();
+
+app.MapGet("/minimal/projects/{projectId:int}/tasks/{id:int}",
+async (int projectId, int id, ITaskItemService service) =>
+{
+    var task = await service.GetTaskByIdAsync(id);
+    if (task == null || task.ProjectId != projectId)
+        return Results.NotFound(new ApiResponse<object>
+        {
+            Success = false,
+            Message = "Task not found",
+            Data = null
+        });
+
+    return Results.Ok(new ApiResponse<TaskResponse>
+    {
+        Success = true,
+        Message = "Task fetched",
+        Data = new TaskResponse
+        {
+            Id = task.Id,
+            Title = task.Title,
+            Description = task.Description,
+            Status = task.Status,
+            UserId = task.UserId,
+            ProjectId = task.ProjectId,
+            CreatedAt = task.CreatedAt,
+            UpdatedAt = task.UpdatedAt
+        }
+    });
+})
+.RequireAuthorization();
+
+app.MapDelete("/minimal/projects/{projectId:int}/tasks/{id:int}",
+async (int projectId, int id, ITaskItemService service) =>
+{
+    var task = await service.GetTaskByIdAsync(id);
+    if (task == null || task.ProjectId != projectId)
+        return Results.NotFound(new ApiResponse<object>
+        {
+            Success = false,
+            Message = "Task not found",
+            Data = null
+        });
+
+    await service.DeleteTaskAsync(id);
+
+    return Results.Ok(new ApiResponse<object>
+    {
+        Success = true,
+        Message = "Task deleted successfully",
+        Data = null
+    });
+})
+.RequireAuthorization();
+
 
 // ===================== COMMENTS ======================
 
@@ -425,4 +643,79 @@ app.MapPut("/minimal/tasks/{taskId:int}/comments/{id:int}", async (int taskId, i
 })
 .RequireAuthorization();
 
-app.Run();
+app.MapGet("/minimal/tasks/{taskId:int}/comments",
+async (int taskId, ICommentService service) =>
+{
+    var comments = await service.GetCommentsByTaskIdAsync(taskId);
+
+    var response = comments.Select(c => new CommentResponse
+    {
+        Id = c.Id,
+        Content = c.Content,
+        TaskItemId = c.TaskItemId,
+        UserId = c.CreatedByUserId,
+        CreatedAt = c.CreatedAt,
+        UpdatedAt = c.UpdatedAt
+    }).ToList();
+
+    return Results.Ok(new ApiResponse<List<CommentResponse>>
+    {
+        Success = true,
+        Message = "Comments fetched",
+        Data = response
+    });
+})
+.RequireAuthorization();
+
+app.MapGet("/minimal/tasks/{taskId:int}/comments/{id:int}",
+async (int taskId, int id, ICommentService service) =>
+{
+    var comment = await service.GetCommentByIdAsync(id);
+    if (comment == null || comment.TaskItemId != taskId)
+        return Results.NotFound(new ApiResponse<object>
+        {
+            Success = false,
+            Message = "Comment not found",
+            Data = null
+        });
+
+    return Results.Ok(new ApiResponse<CommentResponse>
+    {
+        Success = true,
+        Message = "Comment fetched",
+        Data = new CommentResponse
+        {
+            Id = comment.Id,
+            Content = comment.Content,
+            TaskItemId = comment.TaskItemId,
+            UserId = comment.CreatedByUserId,
+            CreatedAt = comment.CreatedAt,
+            UpdatedAt = comment.UpdatedAt
+        }
+    });
+})
+.RequireAuthorization();
+
+app.MapDelete("/minimal/tasks/{taskId:int}/comments/{id:int}",
+async (int taskId, int id, ICommentService service) =>
+{
+    var comment = await service.GetCommentByIdAsync(id);
+    if (comment == null || comment.TaskItemId != taskId)
+        return Results.NotFound(new ApiResponse<object>
+        {
+            Success = false,
+            Message = "Comment not found",
+            Data = null
+        });
+
+    await service.DeleteCommentAsync(id);
+    return Results.Ok(new ApiResponse<object>
+    {
+        Success = true,
+        Message = "Comment deleted successfully",
+        Data = null
+    });
+})
+.RequireAuthorization();
+
+app.Run();  

@@ -146,9 +146,15 @@ public class UserController : ControllerBase
             return NotFound(new ApiResponse<object>
             {
                 Success = false,
-                Message = "User not found"
+                Message = "User not found",
+                Data = null
             });
 
-        return NoContent();
+        return Ok(new ApiResponse<object>
+       {
+        Success = true,
+        Message = "User deleted successfully",
+        Data = null
+       });
     }
 }
