@@ -1,11 +1,13 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
+using System.Security.Claims;
 using TaskMgmt.Interfaces;
 using TaskMgmt.DTOs;
 using TaskMgmt.Models;
 using TaskMgmt.Common;
 
 namespace TaskMgmt.Controllers;
+
 [Authorize]
 [ApiController]
 [Route("api/projects")]
@@ -52,32 +54,32 @@ public class ProjectController : ControllerBase
                 Message = "Project not found"
             });
 
-        var response = new ProjectResponse
-        {
-            Id = project.Id,
-            Name = project.Name,
-            Description = project.Description,
-            UserId = project.UserId,
-            CreatedAt = project.CreatedAt,
-            UpdatedAt = project.UpdatedAt
-        };
-
         return Ok(new ApiResponse<ProjectResponse>
         {
             Success = true,
             Message = "Project fetched successfully",
-            Data = response
+            Data = new ProjectResponse
+            {
+                Id = project.Id,
+                Name = project.Name,
+                Description = project.Description,
+                UserId = project.UserId,
+                CreatedAt = project.CreatedAt,
+                UpdatedAt = project.UpdatedAt
+            }
         });
     }
 
     [HttpPost]
     public async Task<IActionResult> Create(ProjectCreate dto)
     {
+        var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
         var project = new Project
         {
             Name = dto.Name,
             Description = dto.Description,
-            UserId = dto.UserId
+            UserId = userId
         };
 
         var created = await _service.CreateProjectAsync(project);
@@ -103,13 +105,12 @@ public class ProjectController : ControllerBase
     {
         var existing = await _service.GetProjectByIdAsync(id);
         if (existing == null)
-
             return NotFound(new ApiResponse<object>
-           {
-            Success = false,
-            Message = "Project not found",
-            Data = null
-           });
+            {
+                Success = false,
+                Message = "Project not found",
+                Data = null
+            });
 
         existing.Name = dto.Name;
         existing.Description = dto.Description;
@@ -138,17 +139,17 @@ public class ProjectController : ControllerBase
         var success = await _service.DeleteProjectAsync(id);
         if (!success)
             return NotFound(new ApiResponse<object>
-           {
-            Success = false,
-            Message = "Project not found",
-            Data = null
-           });
+            {
+                Success = false,
+                Message = "Project not found",
+                Data = null
+            });
 
         return Ok(new ApiResponse<object>
-       {
-        Success = true,
-        Message = "Project deleted successfully",
-        Data = null
-       });
+        {
+            Success = true,
+            Message = "Project deleted successfully",
+            Data = null
+        });
     }
 }

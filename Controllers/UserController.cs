@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Logging;
 using TaskMgmt.Interfaces;
 using TaskMgmt.DTOs;
@@ -9,6 +10,7 @@ namespace TaskMgmt.Controllers;
 
 [ApiController]
 [Route("api/users")]
+[Authorize(Roles = "Admin")]
 public class UserController : ControllerBase
 {
     private readonly IUserService _userService;
@@ -85,11 +87,14 @@ public class UserController : ControllerBase
     {
         _logger.LogInformation("Creating new user with username {Username}", dto.Username);
 
+        var role = dto.Role == "Admin" ? "Admin" : "User";
+
         var user = new User
         {
             Username = dto.Username,
             Email = dto.Email,
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password)
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password),
+            Role = role
         };
 
         var created = await _userService.CreateUserAsync(user);

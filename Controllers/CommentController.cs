@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
+using System.Security.Claims;
 using TaskMgmt.Interfaces;
 using TaskMgmt.DTOs;
 using TaskMgmt.Models;
@@ -6,6 +8,7 @@ using TaskMgmt.Common;
 
 namespace TaskMgmt.Controllers;
 
+[Authorize]
 [ApiController]
 [Route("api/tasks/{taskId}/comments")]
 public class CommentController : ControllerBase
@@ -18,7 +21,7 @@ public class CommentController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetByTask(int taskId)   
+    public async Task<IActionResult> GetByTask(int taskId)
     {
         var comments = await _service.GetCommentsByTaskIdAsync(taskId);
 
@@ -41,13 +44,15 @@ public class CommentController : ControllerBase
     }
 
     [HttpPost]
-    public async Task<IActionResult> Create(int taskId, CommentCreate dto) 
+    public async Task<IActionResult> Create(int taskId, CommentCreate dto)
     {
+        var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
         var comment = new Comment
         {
             Content = dto.Content,
             TaskItemId = taskId,
-            CreatedByUserId = dto.UserId
+            CreatedByUserId = userId
         };
 
         var created = await _service.CreateCommentAsync(comment);
@@ -67,24 +72,26 @@ public class CommentController : ControllerBase
             }
         });
     }
+
     [HttpDelete("{id}")]
-    public async Task<IActionResult> Delete(int taskId,  int id) 
+    public async Task<IActionResult> Delete(int taskId, int id)
     {
         var comment = await _service.GetCommentByIdAsync(id);
         if (comment == null || comment.TaskItemId != taskId)
-           return NotFound(new ApiResponse<object>
-          {
-            Success = false,
-            Message = "Comment not found",
-            Data = null
-          });
+            return NotFound(new ApiResponse<object>
+            {
+                Success = false,
+                Message = "Comment not found",
+                Data = null
+            });
 
         await _service.DeleteCommentAsync(id);
-         return Ok(new ApiResponse<object>
+
+        return Ok(new ApiResponse<object>
         {
-        Success = true,
-        Message = "Comment deleted successfully",
-        Data = null
+            Success = true,
+            Message = "Comment deleted successfully",
+            Data = null
         });
     }
 }

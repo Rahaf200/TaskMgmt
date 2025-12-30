@@ -11,6 +11,7 @@ using TaskMgmt.DTOs;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using System.Security.Claims;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -240,7 +241,8 @@ app.MapDelete("/minimal/users/{id:int}", async (int id, IUserService service) =>
 
 // ==================== PROJECTS =======================
 
-app.MapPost("/minimal/projects", async (ProjectCreate dto, IProjectService service) =>
+app.MapPost("/minimal/projects",async (ProjectCreate dto, ClaimsPrincipal user, IProjectService service) =>
+
 {
     if (!TryValidate(dto, out var errors))
     {
@@ -252,11 +254,13 @@ app.MapPost("/minimal/projects", async (ProjectCreate dto, IProjectService servi
         });
     }
 
+    var userId = int.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
     var created = await service.CreateProjectAsync(new Project
     {
         Name = dto.Name,
         Description = dto.Description,
-        UserId = dto.UserId
+        UserId = userId
     });
 
     return Results.Ok(new ApiResponse<ProjectResponse>
@@ -275,6 +279,7 @@ app.MapPost("/minimal/projects", async (ProjectCreate dto, IProjectService servi
     });
 })
 .RequireAuthorization();
+
 
 app.MapPut("/minimal/projects/{id:int}", async (int id, ProjectUpdate dto, IProjectService service) =>
 {
@@ -388,7 +393,8 @@ app.MapDelete("/minimal/projects/{id:int}", async (int id, IProjectService servi
 
 // ====================== TASKS ========================
 
-app.MapPost("/minimal/projects/{projectId:int}/tasks", async (int projectId, TaskCreate dto, ITaskItemService service) =>
+app.MapPost("/minimal/projects/{projectId:int}/tasks",async (int projectId, TaskCreate dto, ClaimsPrincipal user, ITaskItemService service) =>
+
 {
     if (!TryValidate(dto, out var errors))
     {
@@ -400,12 +406,14 @@ app.MapPost("/minimal/projects/{projectId:int}/tasks", async (int projectId, Tas
         });
     }
 
+    var userId = int.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
     var created = await service.CreateTaskAsync(new TaskItem
     {
         Title = dto.Title,
         Description = dto.Description,
         Status = dto.Status,
-        UserId = dto.UserId,
+        UserId = userId,
         ProjectId = projectId
     });
 
@@ -427,6 +435,7 @@ app.MapPost("/minimal/projects/{projectId:int}/tasks", async (int projectId, Tas
     });
 })
 .RequireAuthorization();
+
 
 app.MapPut("/minimal/projects/{projectId:int}/tasks/{id:int}",
 async (int projectId, int id, TaskUpdate dto, ITaskItemService service) =>
@@ -563,7 +572,8 @@ async (int projectId, int id, ITaskItemService service) =>
 
 // ===================== COMMENTS ======================
 
-app.MapPost("/minimal/tasks/{taskId:int}/comments", async (int taskId, CommentCreate dto, ICommentService service) =>
+app.MapPost("/minimal/tasks/{taskId:int}/comments",
+async (int taskId, CommentCreate dto, ClaimsPrincipal user, ICommentService service) =>
 {
     if (!TryValidate(dto, out var errors))
     {
@@ -575,11 +585,13 @@ app.MapPost("/minimal/tasks/{taskId:int}/comments", async (int taskId, CommentCr
         });
     }
 
+    var userId = int.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
     var created = await service.CreateCommentAsync(new Comment
     {
         Content = dto.Content,
         TaskItemId = taskId,
-        CreatedByUserId = dto.UserId
+        CreatedByUserId = userId
     });
 
     return Results.Ok(new ApiResponse<CommentResponse>
@@ -598,6 +610,7 @@ app.MapPost("/minimal/tasks/{taskId:int}/comments", async (int taskId, CommentCr
     });
 })
 .RequireAuthorization();
+
 
 app.MapPut("/minimal/tasks/{taskId:int}/comments/{id:int}", async (int taskId, int id, CommentUpdate dto, ICommentService service) =>
 {

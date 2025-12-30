@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
+using System.Security.Claims;
 using TaskMgmt.Interfaces;
 using TaskMgmt.DTOs;
 using TaskMgmt.Models;
@@ -6,6 +8,7 @@ using TaskMgmt.Common;
 
 namespace TaskMgmt.Controllers;
 
+[Authorize]
 [ApiController]
 [Route("api/projects/{projectId}/tasks")]
 public class TaskItemController : ControllerBase
@@ -43,14 +46,16 @@ public class TaskItemController : ControllerBase
     }
 
     [HttpPost]
-    public async Task<IActionResult> Create(int projectId,TaskCreate dto)                
-         {
+    public async Task<IActionResult> Create(int projectId, TaskCreate dto)
+    {
+        var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
         var task = new TaskItem
         {
             Title = dto.Title,
             Description = dto.Description,
             Status = dto.Status,
-            UserId = dto.UserId,
+            UserId = userId,
             ProjectId = projectId
         };
 
@@ -78,15 +83,13 @@ public class TaskItemController : ControllerBase
     public async Task<IActionResult> Update(int projectId, int id, TaskUpdate dto)
     {
         var existing = await _service.GetTaskByIdAsync(id);
-
         if (existing == null || existing.ProjectId != projectId)
-
-        return NotFound(new ApiResponse<object>
-        {
-            Success = false,
-            Message = "Task not found",
-            Data = null
-        });
+            return NotFound(new ApiResponse<object>
+            {
+                Success = false,
+                Message = "Task not found",
+                Data = null
+            });
 
         existing.Title = dto.Title;
         existing.Description = dto.Description;
@@ -118,18 +121,19 @@ public class TaskItemController : ControllerBase
         var existing = await _service.GetTaskByIdAsync(id);
         if (existing == null || existing.ProjectId != projectId)
             return NotFound(new ApiResponse<object>
-           {
-            Success = false,
-            Message = "Task not found",
-            Data = null
-           });
+            {
+                Success = false,
+                Message = "Task not found",
+                Data = null
+            });
 
         await _service.DeleteTaskAsync(id);
+
         return Ok(new ApiResponse<object>
-       {
-        Success = true,
-        Message = "Task deleted successfully",
-        Data = null
-       });
+        {
+            Success = true,
+            Message = "Task deleted successfully",
+            Data = null
+        });
     }
 }
