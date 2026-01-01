@@ -56,7 +56,9 @@ public class ProjectService : IProjectService
         var proj = await _db.Projects.FindAsync(id);
         if (proj == null) return false;
 
-        _db.Projects.Remove(proj);
+        proj.IsDeleted = true;
+        proj.UpdatedAt = DateTime.UtcNow;
+
         await _db.SaveChangesAsync();
         return true;
     }

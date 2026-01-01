@@ -63,7 +63,9 @@ public class TaskItemService : ITaskItemService
         var t = await _db.TaskItems.FindAsync(id);
         if (t == null) return false;
 
-        _db.TaskItems.Remove(t);
+        t.IsDeleted = true;
+        t.UpdatedAt = DateTime.UtcNow;
+
         await _db.SaveChangesAsync();
         return true;
     }

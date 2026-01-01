@@ -9,6 +9,8 @@ namespace TaskMgmt.Models
         public string? Description { get; set; }
         public TaskStatus Status { get; set; } = TaskStatus.New;
 
+        public bool IsDeleted { get; set; } = false;
+
         public int UserId { get; set; }
         public User User { get; set; } = null!;
         public int ProjectId { get; set; }

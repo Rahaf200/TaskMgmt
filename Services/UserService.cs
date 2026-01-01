@@ -63,7 +63,9 @@ public class UserService : IUserService
         var u = await _db.Users.FindAsync(id);
         if (u == null) return false;
 
-        _db.Users.Remove(u);
+        u.IsDeleted = true; 
+        u.UpdatedAt = DateTime.UtcNow;
+        
         await _db.SaveChangesAsync();
         return true;
     }

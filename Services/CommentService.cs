@@ -53,9 +53,10 @@ public class CommentService : ICommentService
         if (comment == null)
             return false;
 
-        _context.Comments.Remove(comment);
-        await _context.SaveChangesAsync();
+        comment.IsDeleted = true;
+        comment.UpdatedAt = DateTime.UtcNow;
 
+        await _context.SaveChangesAsync();
         return true;
     }
 }

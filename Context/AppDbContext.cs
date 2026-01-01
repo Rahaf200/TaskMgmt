@@ -19,6 +19,11 @@ namespace TaskMgmt.Context
         {
             base.OnModelCreating(modelBuilder);
 
+             modelBuilder.Entity<User>().HasQueryFilter(x => !x.IsDeleted);
+             modelBuilder.Entity<Project>().HasQueryFilter(x => !x.IsDeleted);
+             modelBuilder.Entity<TaskItem>().HasQueryFilter(x => !x.IsDeleted);
+             modelBuilder.Entity<Comment>().HasQueryFilter(x => !x.IsDeleted);
+
             modelBuilder.Entity<Project>()
                 .HasOne(p => p.User)
                 .WithMany(u => u.Projects)
