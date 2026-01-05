@@ -12,8 +12,14 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using System.Security.Claims;
+using Microsoft.OpenApi.Models;
+
+
 
 var builder = WebApplication.CreateBuilder(args);
+//===================== LOGGING ======================
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole();
 
 // ===================== SERVICES =====================
 builder.Services.AddDbContext<AppDbContext>(options =>
@@ -34,8 +40,40 @@ builder.Services.AddControllers()
     });
 
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(c =>
+{
+    c.SwaggerDoc("v1", new() 
+    { 
+        Title = "Task Management API", 
+        Version = "v1" 
+    });
 
+    c.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = Microsoft.OpenApi.Models.SecuritySchemeType.Http,
+        Scheme = "Bearer",
+        BearerFormat = "JWT",
+        In = Microsoft.OpenApi.Models.ParameterLocation.Header,
+        Description = "Enter JWT token like: Bearer {your token}"
+    });
+
+    c.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
+    {
+        {
+            new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+            {
+                Reference = new Microsoft.OpenApi.Models.OpenApiReference
+                {
+                    Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+            Array.Empty<string>()
+        }
+    });
+});
+// ===================== AUTH =====================
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -263,7 +301,7 @@ app.MapPost("/minimal/projects",async (ProjectCreate dto, ClaimsPrincipal user, 
         UserId = userId
     });
 
-    return Results.Ok(new ApiResponse<ProjectResponse>
+    return Results.Created($"/minimal/projects/{created.Id}",new ApiResponse<ProjectResponse>
     {
         Success = true,
         Message = "Project created",
@@ -417,7 +455,7 @@ app.MapPost("/minimal/projects/{projectId:int}/tasks",async (int projectId, Task
         ProjectId = projectId
     });
 
-    return Results.Ok(new ApiResponse<TaskResponse>
+    return Results.Created( $"/minimal/projects/{projectId}/tasks/{created.Id}", new ApiResponse<TaskResponse>
     {
         Success = true,
         Message = "Task created",
@@ -594,7 +632,7 @@ async (int taskId, CommentCreate dto, ClaimsPrincipal user, ICommentService serv
         CreatedByUserId = userId
     });
 
-    return Results.Ok(new ApiResponse<CommentResponse>
+    return Results.Created($"/minimal/tasks/{taskId}/comments/{created.Id}", new ApiResponse<CommentResponse>
     {
         Success = true,
         Message = "Comment created",

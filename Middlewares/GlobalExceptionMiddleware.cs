@@ -27,7 +27,7 @@ public class GlobalExceptionMiddleware
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Unhandled exception occurred. Path: {Path}", context.Request.Path);
+            _logger.LogError(ex, "Unhandled exception occurred. Path: {Path}, Method: {Method}", context.Request.Path,context.Request.Method );
 
             context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
             context.Response.ContentType = "application/json";
