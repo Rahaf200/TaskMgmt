@@ -43,7 +43,7 @@ public class AuthController : ControllerBase
         };
 
         var key = new SymmetricSecurityKey(
-            Encoding.UTF8.GetBytes("TASKMGMT_SUPER_SECRET_KEY_123")
+            Encoding.UTF8.GetBytes("TASKMGMT_SUPER_SECRET_KEY_1234567890_ABCDEFGH")
         );
 
         var token = new JwtSecurityToken(

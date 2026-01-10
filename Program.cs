@@ -17,6 +17,12 @@ using Microsoft.OpenApi.Models;
 
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.Converters.Add(
+        new JsonStringEnumConverter()
+    );
+});
 //===================== LOGGING ======================
 builder.Logging.ClearProviders();
 builder.Logging.AddConsole();
@@ -92,7 +98,7 @@ builder.Services.AddAuthentication(options =>
         ValidAudience = "TaskMgmtClient",
 
         IssuerSigningKey = new SymmetricSecurityKey(
-            Encoding.UTF8.GetBytes("TASKMGMT_SUPER_SECRET_KEY_123")
+            Encoding.UTF8.GetBytes("TASKMGMT_SUPER_SECRET_KEY_1234567890_ABCDEFGH")
         )
     };
 });
@@ -100,6 +106,12 @@ builder.Services.AddAuthentication(options =>
 builder.Services.AddAuthorization();
 
 var app = builder.Build();
+
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    db.Database.EnsureCreated();
+}
 
 // ===================== VALIDATION HELPER =====================
 //400 Bad request 
