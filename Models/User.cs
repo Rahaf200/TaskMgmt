@@ -10,6 +10,8 @@ namespace TaskMgmt.Models
         public string PasswordHash { get; set; } = null!;
         public string Role { get; set; } = "User";
 
+         public bool IsDeleted { get; set; } = false;
+         
         public List<TaskItem> Tasks { get; set; } = new();
         public List<Comment> Comments { get; set; } = new();
         public List<Project> Projects { get; set; } = new();

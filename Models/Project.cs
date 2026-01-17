@@ -8,6 +8,8 @@ namespace TaskMgmt.Models
         public string Name { get; set; } = null!;
         public string? Description { get; set; }
 
+        public bool IsDeleted { get; set; } = false;
+        
         public int UserId { get; set; }
         public User User { get; set; } = null!;
 

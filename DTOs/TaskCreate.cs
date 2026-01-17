@@ -12,11 +12,5 @@ namespace TaskMgmt.DTOs
         [Required]
         public TaskStatus Status { get; set; }
 
-        [Range(1, int.MaxValue)]
-        public int UserId { get; set; }
-
-        [Range(1, int.MaxValue)]
-        public int ProjectId { get; set; }
-
     }
 }

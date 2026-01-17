@@ -39,11 +39,11 @@ public class AuthController : ControllerBase
         {
             new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
             new Claim(ClaimTypes.Name, user.Username),
-            new Claim(ClaimTypes.Role, "User")
+            new Claim(ClaimTypes.Role, user.Role)
         };
 
         var key = new SymmetricSecurityKey(
-            Encoding.UTF8.GetBytes("TASKMGMT_SUPER_SECRET_KEY_123")
+            Encoding.UTF8.GetBytes("TASKMGMT_SUPER_SECRET_KEY_1234567890_ABCDEFGH")
         );
 
         var token = new JwtSecurityToken(

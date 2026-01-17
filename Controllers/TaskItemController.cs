@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
+using System.Security.Claims;
 using TaskMgmt.Interfaces;
 using TaskMgmt.DTOs;
 using TaskMgmt.Models;
@@ -6,8 +8,9 @@ using TaskMgmt.Common;
 
 namespace TaskMgmt.Controllers;
 
+[Authorize]
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/projects/{projectId}/tasks")]
 public class TaskItemController : ControllerBase
 {
     private readonly ITaskItemService _service;
@@ -18,9 +21,9 @@ public class TaskItemController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetAll()
+    public async Task<IActionResult> GetAll(int projectId)
     {
-        var tasks = await _service.GetAllTasksAsync();
+        var tasks = await _service.GetTasksByProjectIdAsync(projectId);
 
         var response = tasks.Select(t => new TaskResponse
         {
@@ -43,15 +46,17 @@ public class TaskItemController : ControllerBase
     }
 
     [HttpPost]
-    public async Task<IActionResult> Create(TaskCreate dto)
+    public async Task<IActionResult> Create(int projectId, TaskCreate dto)
     {
+        var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
         var task = new TaskItem
         {
             Title = dto.Title,
             Description = dto.Description,
             Status = dto.Status,
-            UserId = dto.UserId,
-            ProjectId = dto.ProjectId
+            UserId = userId,
+            ProjectId = projectId
         };
 
         var created = await _service.CreateTaskAsync(task);
@@ -75,11 +80,16 @@ public class TaskItemController : ControllerBase
     }
 
     [HttpPut("{id}")]
-    public async Task<IActionResult> Update(int id, TaskUpdate dto)
+    public async Task<IActionResult> Update(int projectId, int id, TaskUpdate dto)
     {
         var existing = await _service.GetTaskByIdAsync(id);
-        if (existing == null)
-            return NotFound();
+        if (existing == null || existing.ProjectId != projectId)
+            return NotFound(new ApiResponse<object>
+            {
+                Success = false,
+                Message = "Task not found",
+                Data = null
+            });
 
         existing.Title = dto.Title;
         existing.Description = dto.Description;
@@ -106,12 +116,24 @@ public class TaskItemController : ControllerBase
     }
 
     [HttpDelete("{id}")]
-    public async Task<IActionResult> Delete(int id)
+    public async Task<IActionResult> Delete(int projectId, int id)
     {
-        var success = await _service.DeleteTaskAsync(id);
-        if (!success)
-            return NotFound();
+        var existing = await _service.GetTaskByIdAsync(id);
+        if (existing == null || existing.ProjectId != projectId)
+            return NotFound(new ApiResponse<object>
+            {
+                Success = false,
+                Message = "Task not found",
+                Data = null
+            });
 
-        return NoContent();
+        await _service.DeleteTaskAsync(id);
+
+        return Ok(new ApiResponse<object>
+        {
+            Success = true,
+            Message = "Task deleted successfully",
+            Data = null
+        });
     }
 }

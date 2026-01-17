@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.Extensions.Logging;
 using TaskMgmt.Interfaces;
 using TaskMgmt.DTOs;
 using TaskMgmt.Models;
@@ -7,20 +9,26 @@ using TaskMgmt.Common;
 namespace TaskMgmt.Controllers;
 
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/users")]
+[Authorize(Roles = "Admin")]
 public class UserController : ControllerBase
 {
     private readonly IUserService _userService;
+    private readonly ILogger<UserController> _logger;
 
-    public UserController(IUserService userService)
+    // 🔹 UPDATED constructor
+    public UserController(IUserService userService, ILogger<UserController> logger)
     {
         _userService = userService;
+        _logger = logger;
     }
 
-    // GET api/user
+    // GET api/users
     [HttpGet]
     public async Task<IActionResult> GetAll()
     {
+        _logger.LogInformation("Fetching all users");
+
         var users = await _userService.GetAllUsersAsync();
 
         var response = users.Select(u => new UserResponse
@@ -40,10 +48,12 @@ public class UserController : ControllerBase
         });
     }
 
-    // GET api/user/{id}
+    // GET api/users/{id}
     [HttpGet("{id}")]
     public async Task<IActionResult> Get(int id)
     {
+        _logger.LogInformation("Fetching user with id {UserId}", id);
+
         var user = await _userService.GetUserByIdAsync(id);
 
         if (user == null)
@@ -71,15 +81,20 @@ public class UserController : ControllerBase
         });
     }
 
-    // POST api/user
+    // POST api/users
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] UserCreate dto)
     {
+        _logger.LogInformation("Creating new user with username {Username}", dto.Username);
+
+        var role = dto.Role == "Admin" ? "Admin" : "User";
+
         var user = new User
         {
             Username = dto.Username,
             Email = dto.Email,
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password)
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password),
+            Role = role
         };
 
         var created = await _userService.CreateUserAsync(user);
@@ -102,10 +117,12 @@ public class UserController : ControllerBase
             });
     }
 
-    // PUT api/user/{id}
+    // PUT api/users/{id}
     [HttpPut("{id}")]
     public async Task<IActionResult> Update(int id, [FromBody] UserUpdate dto)
     {
+        _logger.LogInformation("Updating user with id {UserId}", id);
+
         var existing = await _userService.GetUserByIdAsync(id);
         if (existing == null)
             return NotFound(new ApiResponse<object>
@@ -136,19 +153,27 @@ public class UserController : ControllerBase
         });
     }
 
-    // DELETE api/user/{id}
+    // DELETE api/users/{id}
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(int id)
     {
+        _logger.LogInformation("Deleting user with id {UserId}", id);
+
         var success = await _userService.DeleteUserAsync(id);
 
         if (!success)
             return NotFound(new ApiResponse<object>
             {
                 Success = false,
-                Message = "User not found"
+                Message = "User not found",
+                Data = null
             });
 
-        return NoContent();
+        return Ok(new ApiResponse<object>
+        {
+            Success = true,
+            Message = "User deleted successfully",
+            Data = null
+        });
     }
 }

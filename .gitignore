@@ -1,5 +1,16 @@
+# Build artifacts
 bin/
 obj/
+
+# IDE / Editor files
 .vscode/
+.vs/
 *.user
 *.suo
+
+# Local databases
+*.db
+
+# OS files
+.DS_Store
+Thumbs.db

@@ -11,8 +11,21 @@ using TaskMgmt.DTOs;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using System.Security.Claims;
+using Microsoft.OpenApi.Models;
+
+
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.Converters.Add(
+        new JsonStringEnumConverter()
+    );
+});
+//===================== LOGGING ======================
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole();
 
 // ===================== SERVICES =====================
 builder.Services.AddDbContext<AppDbContext>(options =>
@@ -33,8 +46,40 @@ builder.Services.AddControllers()
     });
 
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(c =>
+{
+    c.SwaggerDoc("v1", new() 
+    { 
+        Title = "Task Management API", 
+        Version = "v1" 
+    });
 
+    c.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = Microsoft.OpenApi.Models.SecuritySchemeType.Http,
+        Scheme = "Bearer",
+        BearerFormat = "JWT",
+        In = Microsoft.OpenApi.Models.ParameterLocation.Header,
+        Description = "Enter JWT token like: Bearer {your token}"
+    });
+
+    c.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
+    {
+        {
+            new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+            {
+                Reference = new Microsoft.OpenApi.Models.OpenApiReference
+                {
+                    Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+            Array.Empty<string>()
+        }
+    });
+});
+// ===================== AUTH =====================
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -53,7 +98,7 @@ builder.Services.AddAuthentication(options =>
         ValidAudience = "TaskMgmtClient",
 
         IssuerSigningKey = new SymmetricSecurityKey(
-            Encoding.UTF8.GetBytes("TASKMGMT_SUPER_SECRET_KEY_123")
+            Encoding.UTF8.GetBytes("TASKMGMT_SUPER_SECRET_KEY_1234567890_ABCDEFGH")
         )
     };
 });
@@ -61,6 +106,12 @@ builder.Services.AddAuthentication(options =>
 builder.Services.AddAuthorization();
 
 var app = builder.Build();
+
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    db.Database.EnsureCreated();
+}
 
 // ===================== VALIDATION HELPER =====================
 //400 Bad request 
@@ -102,26 +153,38 @@ app.MapPost("/minimal/users", async (UserCreate dto, IUserService service) =>
         });
     }
 
-    var created = await service.CreateUserAsync(new User
+    try
     {
-        Username = dto.Username,
-        Email = dto.Email,
-        PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password)
-    });
-
-    return Results.Created($"/minimal/users/{created.Id}", new ApiResponse<UserResponse>
-    {
-        Success = true,
-        Message = "User created",
-        Data = new UserResponse
+        var created = await service.CreateUserAsync(new User
         {
-            Id = created.Id,
-            Username = created.Username,
-            Email = created.Email,
-            CreatedAt = created.CreatedAt,
-            UpdatedAt = created.UpdatedAt
-        }
-    });
+            Username = dto.Username,
+            Email = dto.Email,
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password)
+        });
+
+        return Results.Created($"/minimal/users/{created.Id}", new ApiResponse<UserResponse>
+        {
+            Success = true,
+            Message = "User created",
+            Data = new UserResponse
+            {
+                Id = created.Id,
+                Username = created.Username,
+                Email = created.Email,
+                CreatedAt = created.CreatedAt,
+                UpdatedAt = created.UpdatedAt
+            }
+        });
+    }
+    catch (InvalidOperationException ex)
+    {
+        return Results.Conflict(new ApiResponse<object>
+        {
+            Success = false,
+            Message = ex.Message,
+            Data = null
+        });
+    }
 });
 
 app.MapPut("/minimal/users/{id:int}", async (int id, UserUpdate dto, IUserService service) =>
@@ -160,9 +223,76 @@ app.MapPut("/minimal/users/{id:int}", async (int id, UserUpdate dto, IUserServic
     });
 });
 
+app.MapGet("/minimal/users", async (IUserService service) =>
+{
+    var users = await service.GetAllUsersAsync();
+
+    var response = users.Select(u => new UserResponse
+    {
+        Id = u.Id,
+        Username = u.Username,
+        Email = u.Email,
+        CreatedAt = u.CreatedAt,
+        UpdatedAt = u.UpdatedAt
+    }).ToList();
+
+    return Results.Ok(new ApiResponse<List<UserResponse>>
+    {
+        Success = true,
+        Message = "Users fetched",
+        Data = response
+    });
+});
+
+app.MapGet("/minimal/users/{id:int}", async (int id, IUserService service) =>
+{
+    var user = await service.GetUserByIdAsync(id);
+    if (user == null)
+        return Results.NotFound(new ApiResponse<object>
+        {
+            Success = false,
+            Message = "User not found",
+            Data = null
+        });
+
+    return Results.Ok(new ApiResponse<UserResponse>
+    {
+        Success = true,
+        Message = "User fetched",
+        Data = new UserResponse
+        {
+            Id = user.Id,
+            Username = user.Username,
+            Email = user.Email,
+            CreatedAt = user.CreatedAt,
+            UpdatedAt = user.UpdatedAt
+        }
+    });
+});
+
+app.MapDelete("/minimal/users/{id:int}", async (int id, IUserService service) =>
+{
+    var success = await service.DeleteUserAsync(id);
+    if (!success)
+        return Results.NotFound(new ApiResponse<object>
+        {
+            Success = false,
+            Message = "User not found",
+            Data = null
+        });
+
+    return Results.Ok(new ApiResponse<object>
+    {
+        Success = true,
+        Message = "User deleted successfully",
+        Data = null
+    });
+});
+
 // ==================== PROJECTS =======================
 
-app.MapPost("/minimal/projects", async (ProjectCreate dto, IProjectService service) =>
+app.MapPost("/minimal/projects",async (ProjectCreate dto, ClaimsPrincipal user, IProjectService service) =>
+
 {
     if (!TryValidate(dto, out var errors))
     {
@@ -174,14 +304,16 @@ app.MapPost("/minimal/projects", async (ProjectCreate dto, IProjectService servi
         });
     }
 
+    var userId = int.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
     var created = await service.CreateProjectAsync(new Project
     {
         Name = dto.Name,
         Description = dto.Description,
-        UserId = dto.UserId
+        UserId = userId
     });
 
-    return Results.Ok(new ApiResponse<ProjectResponse>
+    return Results.Created($"/minimal/projects/{created.Id}",new ApiResponse<ProjectResponse>
     {
         Success = true,
         Message = "Project created",
@@ -197,6 +329,7 @@ app.MapPost("/minimal/projects", async (ProjectCreate dto, IProjectService servi
     });
 })
 .RequireAuthorization();
+
 
 app.MapPut("/minimal/projects/{id:int}", async (int id, ProjectUpdate dto, IProjectService service) =>
 {
@@ -236,9 +369,82 @@ app.MapPut("/minimal/projects/{id:int}", async (int id, ProjectUpdate dto, IProj
 })
 .RequireAuthorization();
 
+app.MapGet("/minimal/projects", async (IProjectService service) =>
+{
+    var projects = await service.GetAllProjectsAsync();
+
+    var response = projects.Select(p => new ProjectResponse
+    {
+        Id = p.Id,
+        Name = p.Name,
+        Description = p.Description,
+        UserId = p.UserId,
+        CreatedAt = p.CreatedAt,
+        UpdatedAt = p.UpdatedAt
+    }).ToList();
+
+    return Results.Ok(new ApiResponse<List<ProjectResponse>>
+    {
+        Success = true,
+        Message = "Projects fetched",
+        Data = response
+    });
+})
+.RequireAuthorization();
+
+app.MapGet("/minimal/projects/{id:int}", async (int id, IProjectService service) =>
+{
+    var project = await service.GetProjectByIdAsync(id);
+    if (project == null)
+        return Results.NotFound(new ApiResponse<object>
+        {
+            Success = false,
+            Message = "Project not found",
+            Data = null
+        });
+
+    return Results.Ok(new ApiResponse<ProjectResponse>
+    {
+        Success = true,
+        Message = "Project fetched",
+        Data = new ProjectResponse
+        {
+            Id = project.Id,
+            Name = project.Name,
+            Description = project.Description,
+            UserId = project.UserId,
+            CreatedAt = project.CreatedAt,
+            UpdatedAt = project.UpdatedAt
+        }
+    });
+})
+.RequireAuthorization();
+
+app.MapDelete("/minimal/projects/{id:int}", async (int id, IProjectService service) =>
+{
+    var success = await service.DeleteProjectAsync(id);
+    if (!success)
+        return Results.NotFound(new ApiResponse<object>
+        {
+            Success = false,
+            Message = "Project not found",
+            Data = null
+        });
+
+     return Results.Ok(new ApiResponse<object>
+    {
+        Success = true,
+        Message = "Project deleted successfully",
+        Data = null
+    });
+})
+.RequireAuthorization();
+
+
 // ====================== TASKS ========================
 
-app.MapPost("/minimal/tasks", async (TaskCreate dto, ITaskItemService service) =>
+app.MapPost("/minimal/projects/{projectId:int}/tasks",async (int projectId, TaskCreate dto, ClaimsPrincipal user, ITaskItemService service) =>
+
 {
     if (!TryValidate(dto, out var errors))
     {
@@ -250,16 +456,18 @@ app.MapPost("/minimal/tasks", async (TaskCreate dto, ITaskItemService service) =
         });
     }
 
+    var userId = int.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
     var created = await service.CreateTaskAsync(new TaskItem
     {
         Title = dto.Title,
         Description = dto.Description,
         Status = dto.Status,
-        UserId = dto.UserId,
-        ProjectId = dto.ProjectId
+        UserId = userId,
+        ProjectId = projectId
     });
 
-    return Results.Ok(new ApiResponse<TaskResponse>
+    return Results.Created( $"/minimal/projects/{projectId}/tasks/{created.Id}", new ApiResponse<TaskResponse>
     {
         Success = true,
         Message = "Task created",
@@ -278,7 +486,9 @@ app.MapPost("/minimal/tasks", async (TaskCreate dto, ITaskItemService service) =
 })
 .RequireAuthorization();
 
-app.MapPut("/minimal/tasks/{id:int}", async (int id, TaskUpdate dto, ITaskItemService service) =>
+
+app.MapPut("/minimal/projects/{projectId:int}/tasks/{id:int}",
+async (int projectId, int id, TaskUpdate dto, ITaskItemService service) =>
 {
     if (!TryValidate(dto, out var errors))
     {
@@ -292,7 +502,17 @@ app.MapPut("/minimal/tasks/{id:int}", async (int id, TaskUpdate dto, ITaskItemSe
 
     var task = await service.GetTaskByIdAsync(id);
     if (task == null)
-        return Results.NotFound(new ApiResponse<object> { Success = false, Message = "Task not found" });
+        return Results.NotFound(new ApiResponse<object>
+        {
+            Success = false,
+            Message = "Task not found"
+        });
+    if (task.ProjectId != projectId)
+        return Results.NotFound(new ApiResponse<object>
+        {
+            Success = false,
+            Message = "Task does not belong to this project"
+        });
 
     task.Title = dto.Title;
     task.Description = dto.Description;
@@ -319,9 +539,91 @@ app.MapPut("/minimal/tasks/{id:int}", async (int id, TaskUpdate dto, ITaskItemSe
 })
 .RequireAuthorization();
 
+app.MapGet("/minimal/projects/{projectId:int}/tasks",
+async (int projectId, ITaskItemService service) =>
+{
+    var tasks = await service.GetTasksByProjectIdAsync(projectId);
+
+    var response = tasks.Select(t => new TaskResponse
+    {
+        Id = t.Id,
+        Title = t.Title,
+        Description = t.Description,
+        Status = t.Status,
+        UserId = t.UserId,
+        ProjectId = t.ProjectId,
+        CreatedAt = t.CreatedAt,
+        UpdatedAt = t.UpdatedAt
+    }).ToList();
+
+    return Results.Ok(new ApiResponse<List<TaskResponse>>
+    {
+        Success = true,
+        Message = "Tasks fetched",
+        Data = response
+    });
+})
+.RequireAuthorization();
+
+app.MapGet("/minimal/projects/{projectId:int}/tasks/{id:int}",
+async (int projectId, int id, ITaskItemService service) =>
+{
+    var task = await service.GetTaskByIdAsync(id);
+    if (task == null || task.ProjectId != projectId)
+        return Results.NotFound(new ApiResponse<object>
+        {
+            Success = false,
+            Message = "Task not found",
+            Data = null
+        });
+
+    return Results.Ok(new ApiResponse<TaskResponse>
+    {
+        Success = true,
+        Message = "Task fetched",
+        Data = new TaskResponse
+        {
+            Id = task.Id,
+            Title = task.Title,
+            Description = task.Description,
+            Status = task.Status,
+            UserId = task.UserId,
+            ProjectId = task.ProjectId,
+            CreatedAt = task.CreatedAt,
+            UpdatedAt = task.UpdatedAt
+        }
+    });
+})
+.RequireAuthorization();
+
+app.MapDelete("/minimal/projects/{projectId:int}/tasks/{id:int}",
+async (int projectId, int id, ITaskItemService service) =>
+{
+    var task = await service.GetTaskByIdAsync(id);
+    if (task == null || task.ProjectId != projectId)
+        return Results.NotFound(new ApiResponse<object>
+        {
+            Success = false,
+            Message = "Task not found",
+            Data = null
+        });
+
+    await service.DeleteTaskAsync(id);
+
+    return Results.Ok(new ApiResponse<object>
+    {
+        Success = true,
+        Message = "Task deleted successfully",
+        Data = null
+    });
+})
+.RequireAuthorization();
+
+
 // ===================== COMMENTS ======================
 
-app.MapPost("/minimal/comments", async (CommentCreate dto, ICommentService service) =>
+app.MapPost("/minimal/tasks/{taskId:int}/comments",
+async (int taskId, CommentCreate dto, ClaimsPrincipal user, ICommentService service) =>
 {
     if (!TryValidate(dto, out var errors))
     {
@@ -333,14 +635,16 @@ app.MapPost("/minimal/comments", async (CommentCreate dto, ICommentService servi
         });
     }
 
+    var userId = int.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
     var created = await service.CreateCommentAsync(new Comment
     {
         Content = dto.Content,
-        TaskItemId = dto.TaskItemId,
-        CreatedByUserId = dto.UserId
+        TaskItemId = taskId,
+        CreatedByUserId = userId
     });
 
-    return Results.Ok(new ApiResponse<CommentResponse>
+    return Results.Created($"/minimal/tasks/{taskId}/comments/{created.Id}", new ApiResponse<CommentResponse>
     {
         Success = true,
         Message = "Comment created",
@@ -357,7 +661,8 @@ app.MapPost("/minimal/comments", async (CommentCreate dto, ICommentService servi
 })
 .RequireAuthorization();
 
-app.MapPut("/minimal/comments/{id:int}", async (int id, CommentUpdate dto, ICommentService service) =>
+
+app.MapPut("/minimal/tasks/{taskId:int}/comments/{id:int}", async (int taskId, int id, CommentUpdate dto, ICommentService service) =>
 {
     if (!TryValidate(dto, out var errors))
     {
@@ -372,6 +677,13 @@ app.MapPut("/minimal/comments/{id:int}", async (int id, CommentUpdate dto, IComm
     var comment = await service.GetCommentByIdAsync(id);
     if (comment == null)
         return Results.NotFound(new ApiResponse<object> { Success = false, Message = "Comment not found" });
+
+    if (comment.TaskItemId != taskId)
+        return Results.NotFound(new ApiResponse<object>
+        {
+            Success = false,
+            Message = "Comment does not belong to this task"
+        });
 
     comment.Content = dto.Content;
 
@@ -394,4 +706,79 @@ app.MapPut("/minimal/comments/{id:int}", async (int id, CommentUpdate dto, IComm
 })
 .RequireAuthorization();
 
-app.Run();
+app.MapGet("/minimal/tasks/{taskId:int}/comments",
+async (int taskId, ICommentService service) =>
+{
+    var comments = await service.GetCommentsByTaskIdAsync(taskId);
+
+    var response = comments.Select(c => new CommentResponse
+    {
+        Id = c.Id,
+        Content = c.Content,
+        TaskItemId = c.TaskItemId,
+        UserId = c.CreatedByUserId,
+        CreatedAt = c.CreatedAt,
+        UpdatedAt = c.UpdatedAt
+    }).ToList();
+
+    return Results.Ok(new ApiResponse<List<CommentResponse>>
+    {
+        Success = true,
+        Message = "Comments fetched",
+        Data = response
+    });
+})
+.RequireAuthorization();
+
+app.MapGet("/minimal/tasks/{taskId:int}/comments/{id:int}",
+async (int taskId, int id, ICommentService service) =>
+{
+    var comment = await service.GetCommentByIdAsync(id);
+    if (comment == null || comment.TaskItemId != taskId)
+        return Results.NotFound(new ApiResponse<object>
+        {
+            Success = false,
+            Message = "Comment not found",
+            Data = null
+        });
+
+    return Results.Ok(new ApiResponse<CommentResponse>
+    {
+        Success = true,
+        Message = "Comment fetched",
+        Data = new CommentResponse
+        {
+            Id = comment.Id,
+            Content = comment.Content,
+            TaskItemId = comment.TaskItemId,
+            UserId = comment.CreatedByUserId,
+            CreatedAt = comment.CreatedAt,
+            UpdatedAt = comment.UpdatedAt
+        }
+    });
+})
+.RequireAuthorization();
+
+app.MapDelete("/minimal/tasks/{taskId:int}/comments/{id:int}",
+async (int taskId, int id, ICommentService service) =>
+{
+    var comment = await service.GetCommentByIdAsync(id);
+    if (comment == null || comment.TaskItemId != taskId)
+        return Results.NotFound(new ApiResponse<object>
+        {
+            Success = false,
+            Message = "Comment not found",
+            Data = null
+        });
+
+    await service.DeleteCommentAsync(id);
+    return Results.Ok(new ApiResponse<object>
+    {
+        Success = true,
+        Message = "Comment deleted successfully",
+        Data = null
+    });
+})
+.RequireAuthorization();
+
+app.Run();  

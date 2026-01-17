@@ -9,7 +9,5 @@ namespace TaskMgmt.DTOs
         public string Name { get; set; } = null!;
         public string? Description { get; set; }
 
-        [Range(1, int.MaxValue)]
-        public int UserId { get; set; }
     }
 }
